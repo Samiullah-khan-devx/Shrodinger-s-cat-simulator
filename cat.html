@@ -446,6 +446,7 @@ const qsa=(s,p)=>(p||document).querySelectorAll(s);
   setInterval(()=>{
     g.textContent=String(Math.floor(Math.random()*100)).padStart(2,'0');
     g.classList.remove('ck');void g.offsetWidth;g.classList.add('ck');
+    if(typeof playGeiger==='function'&&Math.random()>.4)playGeiger();
   },900);
 })();
 
@@ -482,25 +483,158 @@ const qsa=(s,p)=>(p||document).querySelectorAll(s);
 
 // === SOUND ===
 (function(){
-  let act=0;
-  window.playTone=(alive)=>{
+  let ac=null,buf=null;
+  function getAC(){
+    if(!ac)ac=new(window.AudioContext||window.webkitAudioContext);
+    if(ac.state==='suspended')ac.resume();
+    return ac;
+  }
+  function noise(len,sr){
+    const l=sr*len,b=new Float32Array(l);
+    for(let i=0;i<l;i++)b[i]=Math.random()*2-1;
+    return b;
+  }
+  function playBuf(b,sr,vol,start,dur){
+    const c=getAC(),s=c.createBufferSource();
+    s.buffer=(()=>{const buf=c.createBuffer(1,b.length,sr);buf.getChannelData(0).set(b);return buf})();
+    const g=c.createGain();g.gain.value=vol;
+    s.connect(g);g.connect(c.destination);
+    s.start(c.currentTime+start);
+    if(dur)s.stop(c.currentTime+start+dur);
+    return {s,g};
+  }
+  function noiseBuf(dur,sr=44100){const l=sr*dur,b=new Float32Array(l);for(let i=0;i<l;i++)b[i]=Math.random()*2-1;return b}
+  function filtNoise(dur,f0,f1,type='lowpass',sr=44100){
+    const b=noiseBuf(dur,sr),c=getAC();
+    const buf=c.createBuffer(1,b.length,sr);buf.getChannelData(0).set(b);
+    const s=c.createBufferSource();s.buffer=buf;
+    const f=c.createBiquadFilter();f.type=type;f.frequency.setValueAtTime(f0,c.currentTime);
+    if(f1!==f0)f.frequency.linearRampToValueAtTime(f1,c.currentTime+dur);
+    const g=c.createGain();g.gain.value=.05;
+    s.connect(f);f.connect(g);g.connect(c.destination);
+    s.start();setTimeout(()=>{try{s.stop()}catch(e){}},dur*1000+50);
+    return {s,g};
+  }
+
+  // observe result tone
+  window.playResult=(alive)=>{
     try{
-      const ac=new(window.AudioContext||window.webkitAudioContext);
-      const g=ac.createGain();g.connect(ac.destination);g.gain.value=.08;
-      const o=ac.createOscillator();o.connect(g);
+      const c=getAC();
       if(alive){
-        o.type='sine';o.frequency.setValueAtTime(523,ac.currentTime);
-        o.frequency.linearRampToValueAtTime(659,ac.currentTime+.08);
-        o.frequency.linearRampToValueAtTime(784,ac.currentTime+.16);
-        g.gain.linearRampToValueAtTime(0,ac.currentTime+.35);
-        o.start(ac.currentTime);o.stop(ac.currentTime+.35);
+        [523,659,784,1047].forEach((f,i)=>{
+          const g=c.createGain();g.connect(c.destination);
+          const o=c.createOscillator();o.type='sine';o.frequency.value=f;
+          o.connect(g);
+          const t=c.currentTime+i*.09;
+          g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.07,t+.02);
+          g.gain.linearRampToValueAtTime(0,t+.25);
+          o.start(t);o.stop(t+.25);
+        });
       }else{
-        o.type='sawtooth';o.frequency.setValueAtTime(200,ac.currentTime);
-        o.frequency.linearRampToValueAtTime(80,ac.currentTime+.3);
-        g.gain.value=.05;
-        g.gain.linearRampToValueAtTime(0,ac.currentTime+.3);
-        o.start(ac.currentTime);o.stop(ac.currentTime+.3);
+        const g=c.createGain();g.connect(c.destination);g.gain.value=.06;
+        const o=c.createOscillator();o.type='triangle';
+        o.frequency.setValueAtTime(180,c.currentTime);
+        o.frequency.linearRampToValueAtTime(50,c.currentTime+.4);
+        o.connect(g);g.gain.linearRampToValueAtTime(0,c.currentTime+.4);
+        o.start();o.stop(c.currentTime+.4);
       }
+    }catch(e){}
+  };
+
+  // box open - filtered noise whoosh
+  window.playOpen=()=>{
+    try{
+      const c=getAC(),b=noiseBuf(.15,44100);
+      const buf=c.createBuffer(1,b.length,44100);buf.getChannelData(0).set(b);
+      const s=c.createBufferSource();s.buffer=buf;
+      const f=c.createBiquadFilter();f.type='bandpass';
+      f.frequency.setValueAtTime(2000,c.currentTime);
+      f.frequency.linearRampToValueAtTime(200,c.currentTime+.15);
+      f.Q.value=2;
+      const g=c.createGain();g.gain.setValueAtTime(0,c.currentTime);
+      g.gain.linearRampToValueAtTime(.04,c.currentTime+.03);
+      g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.15);
+      s.connect(f);f.connect(g);g.connect(c.destination);
+      s.start();setTimeout(()=>{try{s.stop()}catch(e){}},200);
+    }catch(e){}
+  };
+
+  // geiger tick
+  window.playGeiger=()=>{
+    try{
+      const c=getAC();
+      const b=noiseBuf(.03,44100);
+      const buf=c.createBuffer(1,b.length,44100);buf.getChannelData(0).set(b);
+      const s=c.createBufferSource();s.buffer=buf;
+      const f=c.createBiquadFilter();f.type='highpass';f.frequency.value=3000;
+      const g=c.createGain();g.gain.value=.03;
+      s.connect(f);f.connect(g);g.connect(c.destination);
+      s.start();setTimeout(()=>{try{s.stop()}catch(e){}},50);
+    }catch(e){}
+  };
+
+  // ambient drone
+  (function(){
+    try{
+      const c=getAC(),t=c.currentTime;
+      const g=c.createGain();g.gain.value=0;g.gain.linearRampToValueAtTime(.015,t+2);
+      g.connect(c.destination);
+      [55,62,73,87].forEach((f,i)=>{
+        const o=c.createOscillator();o.type='sine';o.frequency.value=f;
+        const g2=c.createGain();g2.gain.value=.6/(i+1);
+        const lfo=c.createOscillator();lfo.frequency.value=.05+Math.random()*.1;
+        const lfog=c.createGain();lfog.gain.value=.3;
+        lfo.connect(lfog);lfog.connect(g2.gain);
+        o.connect(g2);g2.connect(g);
+        o.start();lfo.start();
+      });
+    }catch(e){}
+  })();
+
+  // button click
+  window.playClick=()=>{
+    try{
+      const c=getAC();
+      const b=noiseBuf(.01,44100);
+      const buf=c.createBuffer(1,b.length,44100);buf.getChannelData(0).set(b);
+      const s=c.createBufferSource();s.buffer=buf;
+      const f=c.createBiquadFilter();f.type='highpass';f.frequency.value=5000;
+      const g=c.createGain();g.gain.value=.015;
+      s.connect(f);f.connect(g);g.connect(c.destination);
+      s.start();
+    }catch(e){}
+  };
+
+  // reset whoosh
+  window.playReset=()=>{
+    try{
+      const c=getAC(),b=noiseBuf(.2,44100);
+      const buf=c.createBuffer(1,b.length,44100);buf.getChannelData(0).set(b);
+      const s=c.createBufferSource();s.buffer=buf;
+      const f=c.createBiquadFilter();f.type='lowpass';
+      f.frequency.setValueAtTime(100,c.currentTime);
+      f.frequency.linearRampToValueAtTime(3000,c.currentTime+.2);
+      f.Q.value=1.5;
+      const g=c.createGain();g.gain.setValueAtTime(.03,c.currentTime);
+      g.gain.linearRampToValueAtTime(0,c.currentTime+.2);
+      s.connect(f);f.connect(g);g.connect(c.destination);
+      s.start();setTimeout(()=>{try{s.stop()}catch(e){}},250);
+    }catch(e){}
+  };
+
+  // sparkle (on confetti)
+  window.playSparkle=()=>{
+    try{
+      const c=getAC();
+      [1200,1500,1800,2200].forEach((f,i)=>{
+        const g=c.createGain();g.connect(c.destination);
+        const o=c.createOscillator();o.type='sine';o.frequency.value=f;
+        o.connect(g);
+        const t=c.currentTime+i*.04;
+        g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.02,t+.01);
+        g.gain.exponentialRampToValueAtTime(.001,t+.12);
+        o.start(t);o.stop(t+.12);
+      });
     }catch(e){}
   };
 })();
@@ -566,6 +700,7 @@ function flashScr(){
 }
 
 function spawnConfetti(ok){
+  if(typeof playSparkle==='function')setTimeout(playSparkle,100);
   const b=qs('.bb');if(!b)return;
   const c=document.createElement('div');c.className='cc';
   b.appendChild(c);
@@ -662,7 +797,9 @@ function observe(){
   if(!ct||!s)return;
   total++;
   flashScr();edgePulse();
-  if(typeof playTone==='function')playTone(st);
+  if(typeof playResult==='function')playResult(st);
+  if(typeof playOpen==='function')playOpen();
+  if(typeof playClick==='function')playClick();
   if(typeof collapseWave==='function')collapseWave();
   if(st){
     colorWash('rgba(74,222,128,.08)');
@@ -688,6 +825,7 @@ function observe(){
 }
 
 function resetBox(){
+  if(typeof playReset==='function')playReset();
   if(ai){clearInterval(ai);ai=null;$('btnA').textContent='▶ Auto-run';}
   const bx=$('bx');
   if(bx)bx.classList.remove('open');
@@ -754,11 +892,12 @@ function autoRun(){
   },2600);
 }
 
-$('bw').addEventListener('click',observe);
-$('btnO').addEventListener('click',observe);
-$('btnR').addEventListener('click',resetBox);
-$('btnA').addEventListener('click',autoRun);
-$('btnC').addEventListener('click',clearStats);
+function clickSnd(){if(typeof playClick==='function')playClick()}
+$('bw').addEventListener('click',()=>{clickSnd();observe()});
+$('btnO').addEventListener('click',()=>{clickSnd();observe()});
+$('btnR').addEventListener('click',()=>{clickSnd();resetBox()});
+$('btnA').addEventListener('click',()=>{clickSnd();autoRun()});
+$('btnC').addEventListener('click',()=>{clickSnd();clearStats()});
 
 document.addEventListener('keydown',e=>{
   if(e.key===' '||e.key==='Enter'){
