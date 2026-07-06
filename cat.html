@@ -104,6 +104,15 @@ h1:hover .ty{animation:tyW .5s var(--smooth) infinite alternate!important}
 @keyframes fU{0%{opacity:0;transform:translateY(20px)}100%{opacity:1;transform:translateY(0)}}
 
 /* === BOX === */
+.bp{display:flex;align-items:center;justify-content:center;gap:6px;margin:4px auto 0;flex-wrap:wrap;max-width:360px;animation:fU .9s var(--spring) 3.4s both}
+.bp .pl{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:16px;border:1.5px solid rgba(167,139,250,.25);background:rgba(167,139,250,.06);cursor:pointer;font-size:.6rem;letter-spacing:.3px;transition:all .3s var(--spring);position:relative;white-space:nowrap}
+.bp .pl.act{border-color:var(--c,rgba(167,139,250,.5));background:rgba(167,139,250,.12);box-shadow:0 0 10px var(--c,rgba(167,139,250,.15))}
+.bp .pl .dt{width:5px;height:5px;border-radius:50%;background:var(--c,#a78bfa);flex-shrink:0}
+.bp .pl .nm{color:rgba(255,255,255,.75);font-weight:500}
+.bp .pl .sc{color:rgba(255,255,255,.3);font-size:.5rem;margin-left:2px}
+.bp .ap,.bp .rp{background:none;border:1.5px dashed rgba(255,255,255,.15);color:rgba(255,255,255,.35);border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .3s var(--spring);flex-shrink:0;line-height:1}
+.bp .ap:hover{border-color:#4ade80;color:#4ade80;background:rgba(74,222,128,.08)}
+.bp .rp:hover{border-color:#f87171;color:#f87171;background:rgba(248,113,113,.08)}
 .bw{position:relative;margin:0 auto 28px;width:260px;height:260px;cursor:pointer;perspective:1200px;animation:fU .9s var(--spring) 3.2s both;-webkit-tap-highlight-color:transparent;user-select:none;transition:transform .15s ease-out;filter:drop-shadow(0 0 30px rgba(167,139,250,.04))}
 .bx{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform 1.2s var(--spring);border-radius:24px}
 .bx.open{transform:rotateY(180deg)}
@@ -270,6 +279,8 @@ footer{font-size:.5rem;color:rgba(255,255,255,.08);margin-top:6px;letter-spacing
   <h1 id="title">Schrödinger's Cat</h1>
   <p class="sb">⚛ quantum superposition simulator</p>
 
+  <div class="bp" id="bp"></div>
+
   <div class="bw" id="bw">
     <div class="bx" id="bx">
       <div class="bf ff">
@@ -330,10 +341,80 @@ footer{font-size:.5rem;color:rgba(255,255,255,.08);margin-top:6px;letter-spacing
 </div>
 
 <script>
-let st=null,total=0,alive=0,dead=0,ai=null;
+let st=null,ai=null,cp=0;
+const players=[
+  {n:'Player 1',t:0,a:0,d:0,h:[],c:'#a78bfa'},
+  {n:'Player 2',t:0,a:0,d:0,h:[],c:'#2dd4bf'}
+];
 const $=id=>document.getElementById(id);
 const qs=(s,p)=>(p||document).querySelector(s);
 const qsa=(s,p)=>(p||document).querySelectorAll(s);
+function cur(){return players[cp]}
+function upPUI(){
+  const bp=$('bp');if(!bp)return;
+  bp.querySelectorAll('.pl').forEach((el,i)=>{
+    const p=players[i];
+    el.classList.toggle('act',i===cp);
+    el.style.setProperty('--c',p.c+(i===cp?'.8':'.4'));
+    const nm=el.querySelector('.nm');if(nm)nm.textContent=p.n;
+    const sc=el.querySelector('.sc');if(sc)sc.textContent=p.t;
+  });
+}
+function bpUI(){
+  const bp=$('bp');if(!bp)return;
+  bp.innerHTML='';
+  players.forEach((p,i)=>{
+    const el=document.createElement('div');el.className='pl'+(i===cp?' act':'');
+    el.style.setProperty('--c',p.c+(i===cp?'.8':'.4'));
+    el.innerHTML='<span class="dt"></span><span class="nm">'+p.n+'</span><span class="sc">'+p.t+'</span>';
+    el.addEventListener('click',()=>{if(typeof playClick==='function')playClick();swP(i)});
+    bp.appendChild(el);
+  });
+  const ap=document.createElement('button');ap.className='ap';ap.textContent='+';ap.title='Add player';
+  ap.addEventListener('click',adP);
+  const rp=document.createElement('button');rp.className='rp';rp.textContent='−';rp.title='Remove player';
+  rp.addEventListener('click',rmP);
+  bp.appendChild(ap);bp.appendChild(rp);
+  upPUI();
+}
+function swP(i){
+  if(i===cp)return;
+  if(ai){clearInterval(ai);ai=null;$('btnA').textContent='\u25b6 Auto-run'}
+  const bx=$('bx');
+  if(bx)bx.classList.remove('open');
+  const bw=$('bw');
+  if(bw)bw.style.transform='';
+  cp=i;
+  const c=cur();
+  const ct=$('ct'),s=$('st');
+  if(ct){ct.textContent='\u{1f63a}';ct.className='ct fl'}
+  if(s){s.textContent='\u269b superposition';s.className='st b'}
+  const stT=$('stT');
+  if(stT)stT.textContent='The cat exists in all states until observed.';
+  st=null;
+  upPUI();updateStats();updateProb();
+  const hw=$('hw');if(hw){hw.innerHTML='';c.h.forEach(h=>{const d=document.createElement('div');d.className='hd '+(h?'a':'d');hw.appendChild(d)})}
+  const pB=$('pB');if(pB){pB.classList.remove('fl');void pB.offsetWidth;pB.classList.add('fl')}
+}
+function adP(){
+  if(players.length>=6)return;
+  players.push({n:'Player '+(players.length+1),t:0,a:0,d:0,h:[],c:['#f472b6','#fbbf24','#34d399','#60a5fa'][players.length-2]||'#a78bfa'});
+  bpUI();
+}
+function rmP(){
+  if(players.length<=2)return;
+  if(typeof playClick==='function')playClick();
+  players.splice(cp,1);
+  if(cp>=players.length)cp=players.length-1;
+  bpUI();
+  if(cp===players.length)cp=players.length-1;
+  const c=cur();
+  const ct=$('ct'),s=$('st');
+  if(ct){ct.textContent='😺';ct.className='ct fl'}
+  if(s){s.textContent='⚛ superposition';s.className='st b'}
+  const hw=$('hw');if(hw){hw.innerHTML='';c.h.forEach(h=>{const d=document.createElement('div');d.className='hd '+(h?'a':'d');hw.appendChild(d)})}
+  updateStats();updateProb();upPUI();
+}
 
 // === PARTICLES ===
 (function(){
@@ -640,13 +721,12 @@ const qsa=(s,p)=>(p||document).querySelectorAll(s);
 })();
 
 // === HISTORY ===
-const hist=[];
 function addHist(a){
-  hist.push(a);
-  if(hist.length>30)hist.shift();
+  const c=cur();c.h.push(a);
+  if(c.h.length>30)c.h.shift();
   const hw=$('hw');if(!hw)return;
   hw.innerHTML='';
-  hist.forEach(h=>{
+  c.h.forEach(h=>{
     const d=document.createElement('div');d.className=`hd ${h?'a':'d'}`;
     hw.appendChild(d);
   });
@@ -795,7 +875,7 @@ function observe(){
   st=Math.random()*100<getMd();
   const ct=$('ct'),s=$('st');
   if(!ct||!s)return;
-  total++;
+  const c=cur();c.t++;
   flashScr();edgePulse();
   if(typeof playResult==='function')playResult(st);
   if(typeof playOpen==='function')playOpen();
@@ -807,7 +887,7 @@ function observe(){
     spawnBurst('#4ade80');
     ct.className='ct bu';
     setTimeout(()=>{ct.textContent='😺';ct.className='ct fl'},300);
-    s.textContent='alive';s.className='st a';alive++;
+    s.textContent='alive';s.className='st a';c.a++;
     setTimeout(()=>{spawnConfetti(true);spawnHearts()},180);
   } else {
     colorWash('rgba(248,113,113,.08)');
@@ -815,13 +895,13 @@ function observe(){
     spawnBurst('#f87171');
     ct.className='ct bu';
     setTimeout(()=>{ct.textContent='💀';ct.className='ct'},300);
-    s.textContent='dead';s.className='st d';dead++;
+    s.textContent='dead';s.className='st d';c.d++;
     setTimeout(()=>{spawnConfetti(false);spawnSkulls()},180);
   }
   addHist(st);
   const c=$('c');
   if(c){c.classList.remove('sh');void c.offsetWidth;c.classList.add('sh');}
-  updateProb();updateStats();updateStatus();
+  updateProb();updateStats();updateStatus();upPUI();
 }
 
 function resetBox(){
@@ -851,6 +931,7 @@ function updateProb(){
 }
 
 function updateStats(){
+  const c=cur();
   const gn=(id,v)=>{
     const el=$(id);if(!el)return;
     const g=Math.floor(Math.random()*100);
@@ -858,7 +939,7 @@ function updateStats(){
     void el.offsetWidth;el.classList.add('cu');
     setTimeout(()=>{el.textContent=v;el.classList.remove('cu');void el.offsetWidth;el.classList.add('cu');},70);
   };
-  gn('sT',total);gn('sA',alive);gn('sD',dead);
+  gn('sT',c.t);gn('sA',c.a);gn('sD',c.d);
 }
 
 function updateStatus(){
@@ -874,11 +955,16 @@ function updateStatus(){
     'Entropy always increases.','The observer effect is real.',
     'The universe split again.','Collapse is inevitable.'
   ];
-  const msg=texts[Math.floor(Math.random()*texts.length)]+'<br><span style="font-size:.6rem;opacity:.25;letter-spacing:.3px">'+alive+' alive · '+dead+' dead · '+total+' observed</span>';
+  const cc=cur();
+  const msg=texts[Math.floor(Math.random()*texts.length)]+'<br><span style="font-size:.6rem;opacity:.25;letter-spacing:.3px">'+cc.a+' alive · '+cc.d+' dead · '+cc.t+' observed</span>';
   scrambleText(msg);
 }
 
-function clearStats(){total=0;alive=0;dead=0;hist.length=0;const hw=$('hw');if(hw)hw.innerHTML='';updateStats();resetBox();}
+function clearStats(){
+  const c=cur();c.t=0;c.a=0;c.d=0;c.h=[];
+  const hw=$('hw');if(hw)hw.innerHTML='';
+  upPUI();updateStats();resetBox();
+}
 
 function autoRun(){
   const btn=$('btnA');
@@ -904,7 +990,7 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();
     const bx=$('bx');
     if(!bx)return;
-    if(bx.classList.contains('open'))resetBox();else observe();
+    clickSnd();if(bx.classList.contains('open'))resetBox();else observe();
   }
 });
 
@@ -915,7 +1001,7 @@ qsa('input[name="md"]').forEach(r=>{
   });
 });
 
-resetBox();
+bpUI();resetBox();
 </script>
 </body>
 </html>
