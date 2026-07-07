@@ -899,8 +899,8 @@ function observe(){
     setTimeout(()=>{spawnConfetti(false);spawnSkulls()},180);
   }
   addHist(st);
-  const c=$('c');
-  if(c){c.classList.remove('sh');void c.offsetWidth;c.classList.add('sh');}
+  const sh=$('c');
+  if(sh){sh.classList.remove('sh');void sh.offsetWidth;sh.classList.add('sh');}
   updateProb();updateStats();updateStatus();upPUI();
 }
 
